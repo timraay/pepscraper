@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import sys
+from pathlib import Path
 
 from pepscraper.models import Proposal
 from pepscraper.project_scraper import ProjectScraper
@@ -20,6 +21,8 @@ logging.basicConfig(
 
 
 async def main() -> None:
+    Path("data").mkdir(exist_ok=True)
+
     await drop_tables()
     await create_tables()
 
