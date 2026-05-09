@@ -13,6 +13,7 @@ from pepscraper.models import (
     Project,
     Proposal,
     ProposalRevision,
+    StageHistory,
 )
 from pepscraper.project_scraper import ProjectScraper
 from pepscraper.projects.pep.discourse import (
@@ -67,9 +68,11 @@ class PEPProjectScraper(ProjectScraper):
             proposer_id=-1,
             topic=pep["topic"],
             proposal_type=pep["type"],
+            revisions=[],
+            stage_history=[],
         )
 
-        # Fetch revisions (newest first)
+        # Fetch revisions
         pep_number = pep["number"]
         history = [
             c
@@ -77,28 +80,44 @@ class PEPProjectScraper(ProjectScraper):
                 "pep", "python/peps", pep_number, f"peps/pep-{pep_number:04d}.rst"
             )
         ]
-        for i, (commit, content) in enumerate(history):
-            revision_number = len(history) - i
+        # Sort by oldest first
+        history.sort(key=lambda c: dateutil.parser.parse(c[0]["committedDate"]))
+
+        old_content: str | None = None
+        revision_index = -1
+        for commit, content in history:
+            # If content remains unchanged across revisions, the PDEP was unchanged
+            # by this commit and we can skip it.
+            if old_content == content:
+                logging.debug(
+                    "PEP %s: Commit %s did not change proposal content, skipping",
+                    proposal.proposal_id,
+                    commit["oid"],
+                )
+                continue
+
             try:
                 features = extract_features_from_content(content)
             except ValueError as e:
                 logging.error(
                     "Failed to extract features from PEP %s (rev. %s): %s",
                     pep["number"],
-                    revision_number,
+                    revision_index + 1,
                     e,
                 )
                 continue
 
+            revision_index += 1
+            old_content = content
             created_at = dateutil.parser.parse(commit["committedDate"])
 
             # Create revision
             proposal_revision = ProposalRevision(
                 project_id=project.project_id,
                 proposal_id=str(pep["number"]),
-                revision_index=revision_number - 1,
+                revision_index=revision_index,
                 title=features[0],
-                status=features[1],
+                # status=features[1],
                 created_at=created_at,
                 content=features[2],
                 implemented_at_version=features[3],
@@ -108,6 +127,22 @@ class PEPProjectScraper(ProjectScraper):
                 proposal_revision.authors.append(author)
 
             proposal.revisions.append(proposal_revision)
+
+            # Update stage history
+            if (
+                len(proposal.stage_history) == 0
+                or proposal.stage_history[-1].raw_status != features[1]
+            ):
+                proposal.stage_history.append(
+                    StageHistory(
+                        project_id=project.project_id,
+                        proposal_id=str(pep["number"]),
+                        stage_index=len(proposal.stage_history),
+                        normalised_status=StageHistory.normalise_status(features[1]),
+                        raw_status=features[1],
+                        created_at=created_at,
+                    )
+                )
 
         proposal.proposer = proposal_revision.authors[-1]
 

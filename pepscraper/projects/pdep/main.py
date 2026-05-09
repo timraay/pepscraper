@@ -13,6 +13,7 @@ from pepscraper.models import (
     Project,
     Proposal,
     ProposalRevision,
+    StageHistory,
 )
 from pepscraper.project_scraper import ProjectScraper
 from pepscraper.projects.pdep.github import (
@@ -54,7 +55,7 @@ class PDEPProjectScraper(ProjectScraper):
         pull_request_details: dict[str, Any],
         commit: dict[str, Any],
         proposal_filename: str,
-    ) -> tuple[str, ProposalRevision, list[Person]] | None:
+    ) -> tuple[str, ProposalRevision, str] | None:
         pull_request_number = int(pull_request_details["number"])
         try:
             proposal_id = get_proposal_id_from_title(str(pull_request_details["title"]))
@@ -118,18 +119,20 @@ class PDEPProjectScraper(ProjectScraper):
             proposal_id=proposal_id,
             revision_index=0,
             title=features.title,
-            status=features.status.lower(),
+            # status=features.status.lower(),
             created_at=parser.parse(str(commit["commit"]["author"]["date"])),
             content=features.content,
             implemented_at_version=None,
             authors=authors,
         )
 
-        return proposal_id, proposal_revision, authors
+        status = features.status.lower()
+
+        return proposal_id, proposal_revision, status
 
     async def get_proposals(self) -> Sequence[SQLModel]:
         proposals: dict[str, Proposal] = {}
-        proposal_revisions: dict[str, list[ProposalRevision]] = {}
+        proposal_revisions: dict[str, list[tuple[ProposalRevision, str]]] = {}
 
         for pull_request in await get_pdep_pull_requests():
             pull_request_number = int(pull_request["number"])
@@ -167,7 +170,7 @@ class PDEPProjectScraper(ProjectScraper):
                 # Above step might return None if no revision could be extracted
                 if not revision_data:
                     continue
-                (proposal_id, proposal_revision, authors) = revision_data
+                (proposal_id, proposal_revision, status) = revision_data
 
                 # If the proposal file was renamed in this commit, use the previous
                 # filename for the next commit.
@@ -188,7 +191,7 @@ class PDEPProjectScraper(ProjectScraper):
                 if (
                     proposal_id in proposal_revisions
                     and proposal_revisions[proposal_id]
-                    and proposal_revisions[proposal_id][-1].content
+                    and proposal_revisions[proposal_id][-1][0].content
                     == proposal_revision.content
                 ):
                     logging.info(
@@ -200,8 +203,6 @@ class PDEPProjectScraper(ProjectScraper):
                     # model to be added to a session otherwise.
                     proposal_revision.authors = []
                     continue
-
-                proposal_revision.authors = authors
 
                 # Get the proposal
                 proposal = proposals.get(proposal_id)
@@ -222,13 +223,32 @@ class PDEPProjectScraper(ProjectScraper):
 
                 # Append/assign revision
                 proposal.revisions.append(proposal_revision)
-                proposal_revisions.setdefault(proposal_id, []).append(proposal_revision)
+                proposal_revisions.setdefault(proposal_id, []).append(
+                    (proposal_revision, status)
+                )
 
         # Sort revisions by creation date and assign revision indices
         for revisions in proposal_revisions.values():
-            revisions.sort(key=lambda revision: revision.created_at)
-            for revision_index, revision in enumerate(revisions):
+            revisions.sort(key=lambda revision: revision[0].created_at)
+            for revision_index, (revision, status) in enumerate(revisions):
                 revision.revision_index = revision_index
+
+                # Update stage history if status has changed between revisions
+                proposal = proposals[revision.proposal_id]
+                if (
+                    len(proposal.stage_history) == 0
+                    or proposal.stage_history[-1].raw_status != status
+                ):
+                    proposal.stage_history.append(
+                        StageHistory(
+                            project_id=self.project.project_id,
+                            proposal_id=proposal_id,
+                            stage_index=len(proposal.stage_history),
+                            normalised_status=StageHistory.normalise_status(status),
+                            raw_status=status,
+                            created_at=proposal_revision.created_at,
+                        )
+                    )
 
         return [*proposals.values()]
 
