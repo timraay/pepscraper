@@ -11,14 +11,15 @@ from typing import Any, cast
 import aiofiles
 from aiogzip import AsyncGzipBinaryFile
 
+from pepscraper.constants import END_DATE, START_DATE
 from pepscraper.http import request_page_path
 from pepscraper.projects.pep.utils import get_author_full_name
 
 MAILING_LIST_ARCHIVE_URL = "https://mail.python.org/archives/list/{list_name}@python.org/export/export.mbox.gz?start={from_.year}-{from_.month:02d}-{from_.day:02d}&end={to.year}-{to.month:02d}-{to.day:02d}"
 MAILBOX_DIR = Path("data/mbox")
 
-MAILING_LIST_START_DATE = date(2000, 1, 1)
-MAILING_LIST_END_DATE = date(2024, 1, 1)
+MAILING_LIST_START_DATE = max(START_DATE.date(), date(2000, 1, 1))
+MAILING_LIST_END_DATE = min(END_DATE.date(), date(2024, 1, 1))
 _MAILING_LIST_DOWNLOAD_SEMAPHORE = asyncio.Semaphore(10)
 
 

@@ -228,15 +228,7 @@ class ProposalRevision(SQLModel, table=True):
     proposal_id: Annotated[str, Field(primary_key=True)]
     revision_index: Annotated[int, Field(primary_key=True)]
     title: str
-    created_at: Annotated[
-        datetime,
-        Field(
-            default_factory=datetime.now(tz=UTC),
-            sa_column=Column(
-                DateTime, nullable=False, server_default=func.current_timestamp()
-            ),
-        ),
-    ]
+    created_at: datetime
     content: str | None
     implemented_at_version: str | None
 

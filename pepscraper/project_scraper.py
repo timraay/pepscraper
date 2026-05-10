@@ -33,6 +33,7 @@ class ProjectScraper(ABC):
         logging.info("%s: Fetching proposal discussions...", project_name)
         comments = await self.get_comments()
 
+        # TODO: Discard models not within START_DATE/END_DATE range.
         async with SAVE_LOCK:
             logging.info("%s: Acquiring save lock...", project_name)
             await set_sequence_start(self.get_sql_sequence_start())
