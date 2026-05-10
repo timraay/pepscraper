@@ -32,5 +32,5 @@
 
   // Docstring generation
   "autoDocstring.docstringFormat": "numpy",
-  "python-envs.defaultEnvManager": "ms-python.python:system"
+  "python-envs.defaultEnvManager": "ms-python.python:venv"
 }
