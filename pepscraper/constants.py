@@ -26,6 +26,7 @@ PYTHON_MAILING_LISTS: Final[tuple[tuple[str, timedelta], ...]] = (
     ("async-sig", timedelta(days=365)),
     ("typing-sig", timedelta(days=365)),
     ("distutils-sig", timedelta(days=90)),
+    ("python-ideas", timedelta(days=30)),
     ("python-dev", timedelta(days=7)),
 )
 """A list of Python mailing lists to scrape. The timedelta indicates the window size to
@@ -33,5 +34,3 @@ use. Large window sizes may cause API timeouts if the mailing list is very activ
 
 START_DATE: Final[datetime] = datetime(2000, 1, 1)
 END_DATE: Final[datetime] = datetime(2026, 1, 1)
-
-DEBUG: Final[bool] = True

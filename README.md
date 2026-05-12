@@ -6,7 +6,7 @@ A Python program for mining PEP and PDEP repositories.
 
 _pepscraper_ is designed to contribute to a dataset of enhancement proposals of OSS projects. It scrapes GitHub revisions, mailing lists and discussion fora used to maintain Python Enhancement Proposals (PEPs) and Pandas Enhancement Proposals (PDEPs) and stores the results into a database for easy access.
 
-This program was designed as part of the CSE3000 Research Project course at the Faculty of Electronics, Mathematics and Computer Science of Delft Technical University.
+This program was designed as part of the CSE3000 Research Project course at the Faculty of Electrical Engineering, Mathematics and Computer Science at Delft Technical University.
 
 ### Usage
 
