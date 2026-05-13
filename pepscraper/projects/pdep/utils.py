@@ -1,11 +1,13 @@
 import re
-from typing import NamedTuple, cast
+from typing import Any, NamedTuple, cast
+
+from pepscraper.project_scraper import PersonIdentify
 
 
 class PDEPContentFeatures(NamedTuple):
     title: str
     status: str
-    authors: list[str]
+    authors: list[PersonIdentify]
     created: str | None
     content: str
 
@@ -31,7 +33,7 @@ def extract_features_from_content(content: str) -> PDEPContentFeatures:
     header = parts[0]
     body = parts[1] if len(parts) > 1 else ""
 
-    features: dict[str, str | list[str]] = {}
+    features: dict[str, Any] = {}
 
     # Extract fields
     for pattern, field_name in PDEP_HEADER_PATTERNS:
@@ -47,11 +49,23 @@ def extract_features_from_content(content: str) -> PDEPContentFeatures:
                     if not author_text:
                         continue
                     # Extract name from [Name](url) if present, otherwise use as-is
-                    author_match = re.search(r"\[(.+?)\]", author_text)
+                    author_match = re.search(
+                        r"\[(?P<name>.+?)\]\((?P<url>.*?)\)", author_text
+                    )
                     if author_match:
-                        authors.append(author_match.group(1))
+                        authors.append(
+                            PersonIdentify(
+                                domain="github.com",
+                                full_name=author_match.group("name").strip(),
+                                username=author_match.group("url").removeprefix(
+                                    "https://github.com/"
+                                ),
+                            )
+                        )
                     else:
-                        authors.append(author_text)
+                        authors.append(
+                            PersonIdentify(domain="github.com", full_name=author_text)
+                        )
                 features[field_name] = authors
             else:
                 features[field_name] = value
@@ -65,7 +79,7 @@ def extract_features_from_content(content: str) -> PDEPContentFeatures:
     return PDEPContentFeatures(
         title=cast(str, features.get("title", "")),
         status=cast(str, features.get("status", "")).lower(),
-        authors=cast(list[str], features.get("authors", [])),
+        authors=cast(list[PersonIdentify], features.get("authors", [])),
         created=cast(str | None, features.get("created")),
         content=body,
     )

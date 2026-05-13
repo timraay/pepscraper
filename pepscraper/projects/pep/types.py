@@ -1,5 +1,7 @@
 from typing import Any, NamedTuple, TypedDict
 
+from pepscraper.project_scraper import PersonIdentify
+
 
 class PEPAPIResponseEntry(TypedDict):
     number: int
@@ -91,7 +93,7 @@ class PEPContentFeatures(NamedTuple):
     # created_at: datetime
     content: str
     implemented_at_version: str | None
-    author_names: list[str]
+    author_identities: list[PersonIdentify]
 
 
 class DiscourseTopicEntry(TypedDict):

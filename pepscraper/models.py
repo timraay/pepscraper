@@ -72,7 +72,7 @@ class Person(SQLModel, table=True):
     __tablename__ = "Person"
 
     person_id: Annotated[int | None, Field(primary_key=True)] = None
-    full_name: str
+    full_name: str | None
 
     usernames: list["PersonUsername"] = Relationship(back_populates="person")
     organizations: list["Organisation"] = Relationship(
@@ -86,6 +86,22 @@ class Person(SQLModel, table=True):
     comments: list["Comment"] = Relationship(back_populates="author")
 
     __table_args__ = ({"sqlite_autoincrement": True},)
+
+    def add_username(self, username: str, domain: str) -> "PersonUsername":
+        existing = next(
+            (
+                u
+                for u in self.usernames
+                if u.username == username and u.domain == domain
+            ),
+            None,
+        )
+        if existing:
+            return existing
+
+        new_username = PersonUsername(username=username, domain=domain)
+        self.usernames.append(new_username)
+        return new_username
 
 
 class Organisation(SQLModel, table=True):
@@ -109,7 +125,6 @@ class PersonUsername(SQLModel, table=True):
     ] = None
     domain: Annotated[str, Field(primary_key=True)]
     username: Annotated[str, Field(primary_key=True)]
-    real_name: str | None = None
 
     person: Person = Relationship(back_populates="usernames")
 

@@ -13,7 +13,8 @@ from aiogzip import AsyncGzipBinaryFile
 
 from pepscraper.constants import END_DATE, START_DATE
 from pepscraper.http import request_page_path
-from pepscraper.projects.pep.utils import get_author_full_name
+from pepscraper.project_scraper import PersonIdentify
+from pepscraper.projects.pep.utils import get_author_identity
 
 MAILING_LIST_ARCHIVE_URL = "https://mail.python.org/archives/list/{list_name}@python.org/export/export.mbox.gz?start={from_.year}-{from_.month:02d}-{from_.day:02d}&end={to.year}-{to.month:02d}-{to.day:02d}"
 MAILBOX_DIR = Path("data/mbox")
@@ -128,12 +129,12 @@ def get_mail_date(mail: mailbox.mboxMessage) -> datetime:
     return dt
 
 
-def get_mail_author(mail: mailbox.mboxMessage) -> str:
+def get_mail_author(mail: mailbox.mboxMessage) -> PersonIdentify:
     author_str = mail.get("From")
     if author_str is None:
         raise ValueError("Mail is missing From header")
 
-    return get_author_full_name(decode_mime_words(author_str))
+    return get_author_identity(decode_mime_words(author_str), domain="mail.python.org")
 
 
 def decode_mime_words(value: str) -> str:

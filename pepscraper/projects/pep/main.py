@@ -9,13 +9,12 @@ from sqlmodel import SQLModel
 from pepscraper.constants import PYTHON_MAILING_LISTS
 from pepscraper.models import (
     Comment,
-    Person,
     Project,
     Proposal,
     ProposalRevision,
     StageHistory,
 )
-from pepscraper.project_scraper import ProjectScraper
+from pepscraper.project_scraper import PersonIdentify, ProjectScraper
 from pepscraper.projects.pep.discourse import (
     get_pep_number_from_title,
     get_tagged_topics,
@@ -38,18 +37,6 @@ from pepscraper.projects.pep.utils import (
 
 
 class PEPProjectScraper(ProjectScraper):
-    def __init__(self):
-        super().__init__()
-        self._people: dict[str, Person] = {}
-
-    def get_person(self, name: str) -> Person:
-        if name not in self._people:
-            self._people[name] = Person(full_name=name)
-        return self._people[name]
-
-    def get_people(self) -> list[Person]:
-        return list(self._people.values())
-
     def get_project(self) -> Project:
         return Project(
             project_id=0,
@@ -240,8 +227,13 @@ class PEPProjectScraper(ProjectScraper):
 
             previous_comment: Comment | None = None
             for post in sorted(posts, key=lambda post: int(post["post_number"])):
-                author_name = str(post.get("name") or post.get("username") or "")
-                author = self.get_person(author_name)
+                author = self.get_person(
+                    PersonIdentify(
+                        domain="discuss.python.org",
+                        full_name=post.get("name"),
+                        username=post.get("username"),
+                    )
+                )
                 content = str(post.get("raw") or post.get("cooked") or "")
                 # TODO: Will this cause issues if no Proposal exists with this ID?
                 comment = Comment(

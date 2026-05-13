@@ -3,6 +3,7 @@ import logging
 import re
 
 from pepscraper.http import request_page
+from pepscraper.project_scraper import PersonIdentify
 from pepscraper.projects.pep.types import (
     PEPAPIResponse,
     PEPContentFeatures,
@@ -23,7 +24,16 @@ RE_AUTHOR_NAME_FIRST = re.compile(
 )
 
 
-def get_author_full_name(author: str) -> str:
+def _get_author_match_to_name_and_email(
+    match: re.Match[str],
+    domain: str,
+) -> PersonIdentify:
+    name = match.group("name").strip().strip('"')
+    email = match.group("email").strip().strip('"')
+    return PersonIdentify(domain=domain, full_name=name, email=email)
+
+
+def get_author_identity(author: str, domain: str) -> PersonIdentify:
     author = (
         author.replace(" at ", "@")
         .replace("[at]", "@")
@@ -33,16 +43,16 @@ def get_author_full_name(author: str) -> str:
 
     email_name_match = RE_AUTHOR_EMAIL_FIRST.match(author)
     if email_name_match:
-        return email_name_match.group("name").strip().strip('"')
+        return _get_author_match_to_name_and_email(email_name_match, domain=domain)
 
     name_first_match = RE_AUTHOR_NAME_FIRST.match(author)
     if name_first_match:
-        return name_first_match.group("name").strip().strip('"')
+        return _get_author_match_to_name_and_email(name_first_match, domain=domain)
 
-    # if "@" in author or " " not in author:
-    #     raise ValueError(f"Invalid author: {author}")
+    if "@" in author:
+        return PersonIdentify(domain=domain, full_name=None, email=author.strip())
 
-    return author
+    return PersonIdentify(domain=domain, full_name=author.strip(), email=None)
 
 
 PEP_HEADER_FEATURES: list[tuple[re.Pattern, bool]] = [
@@ -87,18 +97,20 @@ def extract_features_from_content(content: str) -> PEPContentFeatures:
 
     # TODO: Use post-history to determine significant revisions
 
-    author_names: list[str] = []
+    author_identities: list[PersonIdentify] = []
     # TODO: Author might have "," in its name, for example "Fred L. Drake, Jr."
     for author in features["authors"].strip(" ,").split(","):
         author = author.strip()
         try:
-            author_name = get_author_full_name(author)
-            if author_name in author_names:
+            author_identity = get_author_identity(author, domain="peps.python.org")
+            if author_identity in author_identities:
                 logging.warning(
-                    "Duplicate author name '%s': %s", author_name, features["authors"]
+                    "Duplicate author name '%s': %s",
+                    author_identity,
+                    features["authors"],
                 )
                 continue
-            author_names.append(author_name)
+            author_identities.append(author_identity)
         except ValueError as e:
             logging.error("Skipping invalid author '%s': %s", author, e)
 
@@ -109,5 +121,5 @@ def extract_features_from_content(content: str) -> PEPContentFeatures:
         status=features["status"].strip().lower(),
         content=content.strip(),
         implemented_at_version=features.get("python_version"),
-        author_names=author_names,
+        author_identities=author_identities,
     )

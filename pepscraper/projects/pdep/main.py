@@ -15,7 +15,7 @@ from pepscraper.models import (
     ProposalRevision,
     StageHistory,
 )
-from pepscraper.project_scraper import ProjectScraper
+from pepscraper.project_scraper import PersonIdentify, ProjectScraper
 from pepscraper.projects.pdep.github import (
     find_proposal_filename_in_pr,
     get_commit_files,
@@ -30,18 +30,6 @@ from pepscraper.projects.pdep.utils import extract_features_from_content
 
 
 class PDEPProjectScraper(ProjectScraper):
-    def __init__(self):
-        super().__init__()
-        self._people: dict[str, Person] = {}
-
-    def get_person(self, name: str) -> Person:
-        if name not in self._people:
-            self._people[name] = Person(full_name=name)
-        return self._people[name]
-
-    def get_people(self) -> list[Person]:
-        return list(self._people.values())
-
     def get_project(self) -> Project:
         return Project(
             project_id=1,
@@ -111,7 +99,9 @@ class PDEPProjectScraper(ProjectScraper):
                         "name", pull_request_details["user"]["login"]
                     )
                 )
-            proposer = self.get_person(proposer_name)
+            proposer = self.get_person(
+                PersonIdentify(domain="github.com", username=proposer_name)
+            )
             authors = [proposer]
 
         proposal_revision = ProposalRevision(
@@ -218,7 +208,9 @@ class PDEPProjectScraper(ProjectScraper):
 
                     # Proposer is the PR author
                     proposer_name = str(pull_request_details["user"]["login"])
-                    proposer = self.get_person(proposer_name)
+                    proposer = self.get_person(
+                        PersonIdentify(domain="github.com", username=proposer_name)
+                    )
                     proposal.proposer = proposer
 
                 # Append/assign revision
@@ -270,8 +262,9 @@ class PDEPProjectScraper(ProjectScraper):
                 "pdep", "pandas-dev/pandas", pull_request_number
             )
 
+            pull_request_author_name = str(pull_request_details["user"]["login"])
             pull_request_author = self.get_person(
-                str(pull_request_details["user"]["login"])
+                PersonIdentify(domain="github.com", username=pull_request_author_name)
             )
             pull_request_comment = Comment(
                 author_id=None,
@@ -293,7 +286,11 @@ class PDEPProjectScraper(ProjectScraper):
                 if not author_data or not author_data.get("login"):
                     continue
 
-                author = self.get_person(str(author_data["login"]))
+                author = self.get_person(
+                    PersonIdentify(
+                        domain="github.com", username=str(author_data["login"])
+                    )
+                )
                 comment = Comment(
                     author_id=None,
                     project_id=self.project.project_id,
