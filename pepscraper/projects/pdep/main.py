@@ -1,5 +1,6 @@
 import logging
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Any, cast
 
 from aiohttp import ClientResponseError
@@ -121,8 +122,8 @@ class PDEPProjectScraper(ProjectScraper):
         return proposal_id, proposal_revision, status
 
     async def get_proposals(self) -> Sequence[SQLModel]:
-        proposals: dict[str, Proposal] = {}
-        proposal_revisions: dict[str, list[tuple[ProposalRevision, str]]] = {}
+        proposals: dict[str, list[tuple[set[str], Proposal]]] = {}
+        proposal_statuses: dict[str, list[tuple[datetime, str]]] = {}
 
         for pull_request in await get_pdep_pull_requests():
             pull_request_number = int(pull_request["number"])
@@ -150,6 +151,9 @@ class PDEPProjectScraper(ProjectScraper):
                 continue
 
             current_filename = proposal_filename
+            proposal_filenames: set[str] = {proposal_filename}
+            proposal_revisions: list[ProposalRevision] = []
+            statuses: list[tuple[datetime, str]] = []
             for commit in reversed(commits):
                 # Fetch commit contents, extract proposal metadata, and create revision
                 revision_data = await self._get_proposal_revision(
@@ -174,15 +178,14 @@ class PDEPProjectScraper(ProjectScraper):
                         and file.get("previous_filename")
                     ):
                         current_filename = str(file["previous_filename"])
+                        proposal_filenames.add(current_filename)
                         break
 
                 # If content remains unchanged across revisions, the PDEP was unchanged
                 # by this commit and we can skip it.
                 if (
-                    proposal_id in proposal_revisions
-                    and proposal_revisions[proposal_id]
-                    and proposal_revisions[proposal_id][-1][0].content
-                    == proposal_revision.content
+                    proposal_revisions
+                    and proposal_revisions[-1].content == proposal_revision.content
                 ):
                     logging.info(
                         "PDEP %s: Commit %s did not change proposal content, skipping",
@@ -194,55 +197,76 @@ class PDEPProjectScraper(ProjectScraper):
                     proposal_revision.authors = []
                     continue
 
-                # Get the proposal
-                proposal = proposals.get(proposal_id)
-                if proposal is None:
-                    proposal = Proposal(
-                        project_id=self.project.project_id,
-                        proposal_id=proposal_id,
-                        proposer_id=-1,
-                        topic=None,
-                        proposal_type=None,
-                    )
-                    proposals[proposal_id] = proposal
+                proposal_revisions.append(proposal_revision)
+                statuses.append((proposal_revision.created_at, status))
 
-                    # Proposer is the PR author
-                    proposer_name = str(pull_request_details["user"]["login"])
-                    proposer = self.get_person(
-                        PersonIdentify(domain="github.com", username=proposer_name)
-                    )
-                    proposal.proposer = proposer
-
-                # Append/assign revision
-                proposal.revisions.append(proposal_revision)
-                proposal_revisions.setdefault(proposal_id, []).append(
-                    (proposal_revision, status)
+            # Find an existing proposal.
+            # PDEPs can take on the ID of previously rejected PDEPs, so we need to
+            # check for matching filenames as well.
+            proposal_id = proposal_revisions[-1].proposal_id
+            existing_proposals = proposals.get(proposal_id, [])
+            for existing_proposal_filenames, proposal in existing_proposals:  # noqa: B007
+                if proposal_filenames.intersection(existing_proposal_filenames):
+                    existing_proposal_filenames.update(proposal_filenames)
+                    break
+            else:
+                # No existing proposal was found. Create a new proposal instead.
+                proposal = Proposal(
+                    project_id=self.project.project_id,
+                    proposal_id=f"{proposal_id}-{len(existing_proposals) + 1}",
+                    proposer_id=-1,
+                    topic=None,
+                    proposal_type=None,
+                )
+                proposals.setdefault(proposal_id, []).append(
+                    (proposal_filenames, proposal)
                 )
 
+                # Proposer is the PR author
+                proposer_name = str(pull_request_details["user"]["login"])
+                proposer = self.get_person(
+                    PersonIdentify(domain="github.com", username=proposer_name)
+                )
+                proposal.proposer = proposer
+
+            # Append/assign revisions
+            proposal.revisions.extend(proposal_revisions)
+            proposal_statuses.setdefault(proposal.proposal_id, []).extend(statuses)
+
         # Sort revisions by creation date and assign revision indices
-        for revisions in proposal_revisions.values():
-            revisions.sort(key=lambda revision: revision[0].created_at)
-            for revision_index, (revision, status) in enumerate(revisions):
-                revision.revision_index = revision_index
+        for proposal_list in proposals.values():
+            for _, proposal in proposal_list:
+                proposal.revisions.sort(key=lambda revision: revision.created_at)
 
-                # Update stage history if status has changed between revisions
-                proposal = proposals[revision.proposal_id]
-                if (
-                    len(proposal.stage_history) == 0
-                    or proposal.stage_history[-1].raw_status != status
-                ):
-                    proposal.stage_history.append(
-                        ProposalStatus(
-                            project_id=self.project.project_id,
-                            proposal_id=proposal_id,
-                            status_index=len(proposal.stage_history),
-                            normalised_status=ProposalStatus.normalise_status(status),
-                            raw_status=status,
-                            created_at=proposal_revision.created_at,
+                for revision_index, revision in enumerate(proposal.revisions):
+                    revision.revision_index = revision_index
+
+                # Create proposal status history
+                statuses = proposal_statuses[proposal.proposal_id]
+                statuses.sort(key=lambda status: status[0])
+
+                prev_status: str | None = None
+                for created_at, status in statuses:
+                    if status != prev_status:
+                        proposal.stage_history.append(
+                            ProposalStatus(
+                                project_id=self.project.project_id,
+                                proposal_id=proposal.proposal_id,
+                                status_index=len(proposal.stage_history),
+                                normalised_status=ProposalStatus.normalise_status(
+                                    status
+                                ),
+                                raw_status=status,
+                                created_at=created_at,
+                            )
                         )
-                    )
+                        prev_status = status
 
-        return [*proposals.values()]
+        return [
+            proposal
+            for proposal_list in proposals.values()
+            for _, proposal in proposal_list
+        ]
 
     async def get_comments(self) -> Sequence[SQLModel]:
         models: list[Comment] = []
