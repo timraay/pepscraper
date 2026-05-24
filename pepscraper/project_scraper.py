@@ -32,9 +32,9 @@ class ProjectScraper(ABC):
 
     def _get_person_by_username(self, username: str, domain: str) -> Person | None:
         for person in self._people:
-            for person_username in person.usernames:
+            for person_username in person.identifiers:
                 if (
-                    person_username.username == username
+                    person_username.identifier == username
                     and person_username.domain == domain
                 ):
                     return person
@@ -64,10 +64,10 @@ class ProjectScraper(ABC):
                 self._people.insert(0, person)
 
         if identity.username is not None:
-            person.add_username(identity.username, identity.domain)
+            person.add_identifier(identity.username, "username", identity.domain)
 
         if identity.email is not None:
-            person.add_username(identity.email, "email")
+            person.add_identifier(identity.email, "email", identity.domain)
 
         return person
 

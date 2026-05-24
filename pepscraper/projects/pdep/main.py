@@ -13,7 +13,7 @@ from pepscraper.models import (
     Project,
     Proposal,
     ProposalRevision,
-    StageHistory,
+    ProposalStatus,
 )
 from pepscraper.project_scraper import PersonIdentify, ProjectScraper
 from pepscraper.projects.pdep.github import (
@@ -232,11 +232,11 @@ class PDEPProjectScraper(ProjectScraper):
                     or proposal.stage_history[-1].raw_status != status
                 ):
                     proposal.stage_history.append(
-                        StageHistory(
+                        ProposalStatus(
                             project_id=self.project.project_id,
                             proposal_id=proposal_id,
                             stage_index=len(proposal.stage_history),
-                            normalised_status=StageHistory.normalise_status(status),
+                            normalised_status=ProposalStatus.normalise_status(status),
                             raw_status=status,
                             created_at=proposal_revision.created_at,
                         )

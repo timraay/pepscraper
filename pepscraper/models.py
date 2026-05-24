@@ -74,7 +74,7 @@ class Person(SQLModel, table=True):
     person_id: Annotated[int | None, Field(primary_key=True)] = None
     full_name: str | None
 
-    usernames: list["PersonUsername"] = Relationship(back_populates="person")
+    identifiers: list["PersonIdentifier"] = Relationship(back_populates="person")
     organizations: list["Organisation"] = Relationship(
         back_populates="people", link_model=Affiliation
     )
@@ -87,21 +87,27 @@ class Person(SQLModel, table=True):
 
     __table_args__ = ({"sqlite_autoincrement": True},)
 
-    def add_username(self, username: str, domain: str) -> "PersonUsername":
+    def add_identifier(
+        self, identifier: str, identifier_type: str, domain: str
+    ) -> "PersonIdentifier":
         existing = next(
             (
                 u
-                for u in self.usernames
-                if u.username == username and u.domain == domain
+                for u in self.identifiers
+                if u.identifier == identifier
+                and u.domain == domain
+                and u.identifier_type == identifier_type
             ),
             None,
         )
         if existing:
             return existing
 
-        new_username = PersonUsername(username=username, domain=domain)
-        self.usernames.append(new_username)
-        return new_username
+        new_identifier = PersonIdentifier(
+            identifier=identifier, identifier_type=identifier_type, domain=domain
+        )
+        self.identifiers.append(new_identifier)
+        return new_identifier
 
 
 class Organisation(SQLModel, table=True):
@@ -117,16 +123,17 @@ class Organisation(SQLModel, table=True):
     __table_args__ = ({"sqlite_autoincrement": True},)
 
 
-class PersonUsername(SQLModel, table=True):
-    __tablename__ = "PersonUsername"
+class PersonIdentifier(SQLModel, table=True):
+    __tablename__ = "PersonIdentifier"
 
     person_id: Annotated[
         int | None, Field(foreign_key="Person.person_id", primary_key=True)
     ] = None
+    identifier: Annotated[str, Field(primary_key=True)]
+    identifier_type: str
     domain: Annotated[str, Field(primary_key=True)]
-    username: Annotated[str, Field(primary_key=True)]
 
-    person: Person = Relationship(back_populates="usernames")
+    person: Person = Relationship(back_populates="identifiers")
 
 
 class Proposal(SQLModel, table=True):
@@ -143,31 +150,33 @@ class Proposal(SQLModel, table=True):
     project: "Project" = Relationship(back_populates="proposals")
     proposer: "Person" = Relationship(back_populates="proposals")
     revisions: list["ProposalRevision"] = Relationship(back_populates="proposal")
-    stage_history: list["StageHistory"] = Relationship(back_populates="proposal")
+    stage_history: list["ProposalStatus"] = Relationship(back_populates="proposal")
     comments: list["Comment"] = Relationship(back_populates="proposal")
 
 
-class StageHistoryStatus(StrEnum):
+class NormalizedProposalStatus(StrEnum):
     ACCEPTED = "accepted"
     REJECTED = "rejected"
     DRAFT = "draft"
     REVIEW = "review"
     WITHDRAWN = "withdrawn"
     SUPERSEDED = "superseded"
-    ACTIVE = "active"
     UNKNOWN = "unknown"
 
 
-class StageHistory(SQLModel, table=True):
+class ProposalStatus(SQLModel, table=True):
     __tablename__ = "StageHistory"
     project_id: Annotated[int, Field(primary_key=True)]
     proposal_id: Annotated[str, Field(primary_key=True)]
     stage_index: Annotated[int, Field(primary_key=True)]
     normalised_status: Annotated[
-        StageHistoryStatus,
+        NormalizedProposalStatus,
         Field(
             sa_column=Column(
-                Enum(StageHistoryStatus, values_callable=lambda x: [i.value for i in x])
+                Enum(
+                    NormalizedProposalStatus,
+                    values_callable=lambda x: [i.value for i in x],
+                )
             )
         ),
     ]
@@ -181,58 +190,60 @@ class StageHistory(SQLModel, table=True):
             ["project_id", "proposal_id"],
             ["Proposal.project_id", "Proposal.proposal_id"],
         ),
-        enum_to_check_constraint(StageHistoryStatus, "normalised_status"),
+        enum_to_check_constraint(NormalizedProposalStatus, "normalised_status"),
     )
 
     @staticmethod
-    def normalise_status(raw_status: str) -> StageHistoryStatus:
+    def normalise_status(raw_status: str) -> NormalizedProposalStatus:
         raw_status = raw_status.lower().strip()
-        return NORMALIZED_STATUS_MAP.get(raw_status, StageHistoryStatus.UNKNOWN)
+        return NORMALIZED_STATUS_MAP.get(raw_status, NormalizedProposalStatus.UNKNOWN)
 
 
-NORMALIZED_STATUS_MAP: dict[str, StageHistoryStatus] = {
-    "accepted": StageHistoryStatus.ACCEPTED,
-    "stable": StageHistoryStatus.ACCEPTED,
-    "approved": StageHistoryStatus.ACCEPTED,
-    "implemented": StageHistoryStatus.ACCEPTED,
-    "experimental": StageHistoryStatus.ACCEPTED,
-    "published": StageHistoryStatus.ACCEPTED,
-    "preview": StageHistoryStatus.ACCEPTED,
-    "available": StageHistoryStatus.ACCEPTED,
-    "final": StageHistoryStatus.ACCEPTED,
-    "provisional": StageHistoryStatus.ACCEPTED,
-    "rejected": StageHistoryStatus.REJECTED,
-    "superseded": StageHistoryStatus.REJECTED,
-    "replaced": StageHistoryStatus.REJECTED,
-    "declined": StageHistoryStatus.REJECTED,
-    "active": StageHistoryStatus.ACTIVE,
-    "withdrawn": StageHistoryStatus.WITHDRAWN,
-    "abandoned": StageHistoryStatus.WITHDRAWN,
-    "deprecated": StageHistoryStatus.WITHDRAWN,
-    "obsolete": StageHistoryStatus.WITHDRAWN,
-    "review": StageHistoryStatus.REVIEW,
-    "in review": StageHistoryStatus.REVIEW,
-    "in progress": StageHistoryStatus.REVIEW,
-    "in design": StageHistoryStatus.REVIEW,
-    "discussion": StageHistoryStatus.REVIEW,
-    "under discussion": StageHistoryStatus.REVIEW,
-    "under discussions": StageHistoryStatus.REVIEW,
-    "under consideration": StageHistoryStatus.REVIEW,
-    "working on": StageHistoryStatus.REVIEW,
-    "prototype": StageHistoryStatus.REVIEW,
-    "posted": StageHistoryStatus.REVIEW,
-    "submitted": StageHistoryStatus.REVIEW,
-    "candidate": StageHistoryStatus.REVIEW,
-    "funded": StageHistoryStatus.REVIEW,
-    "draft": StageHistoryStatus.DRAFT,
+NORMALIZED_STATUS_MAP: dict[str, NormalizedProposalStatus] = {
+    "accepted": NormalizedProposalStatus.ACCEPTED,
+    "acepted": NormalizedProposalStatus.ACCEPTED,
+    "stable": NormalizedProposalStatus.ACCEPTED,
+    "approved": NormalizedProposalStatus.ACCEPTED,
+    "implemented": NormalizedProposalStatus.ACCEPTED,
+    "experimental": NormalizedProposalStatus.ACCEPTED,
+    "published": NormalizedProposalStatus.ACCEPTED,
+    "preview": NormalizedProposalStatus.ACCEPTED,
+    "available": NormalizedProposalStatus.ACCEPTED,
+    "final": NormalizedProposalStatus.ACCEPTED,
+    "provisional": NormalizedProposalStatus.ACCEPTED,
+    "active": NormalizedProposalStatus.ACCEPTED,
+    "rejected": NormalizedProposalStatus.REJECTED,
+    "declined": NormalizedProposalStatus.REJECTED,
+    "superseded": NormalizedProposalStatus.SUPERSEDED,
+    "deprecated": NormalizedProposalStatus.SUPERSEDED,
+    "obsolete": NormalizedProposalStatus.SUPERSEDED,
+    "replaced": NormalizedProposalStatus.SUPERSEDED,
+    "withdrawal": NormalizedProposalStatus.WITHDRAWN,
+    "withdrawn": NormalizedProposalStatus.WITHDRAWN,
+    "abandoned": NormalizedProposalStatus.WITHDRAWN,
+    "review": NormalizedProposalStatus.REVIEW,
+    "in review": NormalizedProposalStatus.REVIEW,
+    "in progress": NormalizedProposalStatus.REVIEW,
+    "in design": NormalizedProposalStatus.REVIEW,
+    "discussion": NormalizedProposalStatus.REVIEW,
+    "under discussion": NormalizedProposalStatus.REVIEW,
+    "under discussions": NormalizedProposalStatus.REVIEW,
+    "under consideration": NormalizedProposalStatus.REVIEW,
+    "working on": NormalizedProposalStatus.REVIEW,
+    "prototype": NormalizedProposalStatus.REVIEW,
+    "posted": NormalizedProposalStatus.REVIEW,
+    "submitted": NormalizedProposalStatus.REVIEW,
+    "candidate": NormalizedProposalStatus.REVIEW,
+    "funded": NormalizedProposalStatus.REVIEW,
+    "draft": NormalizedProposalStatus.DRAFT,
     # "submitted": StageHistoryStatus.DRAFT,
-    "deferred": StageHistoryStatus.DRAFT,
-    "postponed": StageHistoryStatus.DRAFT,
-    "proposed": StageHistoryStatus.DRAFT,
-    "design": StageHistoryStatus.DRAFT,
-    "incomplete": StageHistoryStatus.DRAFT,
-    "complete": StageHistoryStatus.ACCEPTED,
-    "finished": StageHistoryStatus.ACCEPTED,
+    "deferred": NormalizedProposalStatus.DRAFT,
+    "postponed": NormalizedProposalStatus.DRAFT,
+    "proposed": NormalizedProposalStatus.DRAFT,
+    "design": NormalizedProposalStatus.DRAFT,
+    "incomplete": NormalizedProposalStatus.DRAFT,
+    "complete": NormalizedProposalStatus.ACCEPTED,
+    "finished": NormalizedProposalStatus.ACCEPTED,
 }
 
 
