@@ -168,7 +168,7 @@ class ProposalStatus(SQLModel, table=True):
     __tablename__ = "StageHistory"
     project_id: Annotated[int, Field(primary_key=True)]
     proposal_id: Annotated[str, Field(primary_key=True)]
-    stage_index: Annotated[int, Field(primary_key=True)]
+    status_index: Annotated[int, Field(primary_key=True)]
     normalised_status: Annotated[
         NormalizedProposalStatus,
         Field(

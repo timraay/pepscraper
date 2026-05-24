@@ -124,7 +124,7 @@ class PEPProjectScraper(ProjectScraper):
                     ProposalStatus(
                         project_id=project.project_id,
                         proposal_id=str(pep["number"]),
-                        stage_index=len(proposal.stage_history),
+                        status_index=len(proposal.stage_history),
                         normalised_status=ProposalStatus.normalise_status(features[1]),
                         raw_status=features[1],
                         created_at=created_at,

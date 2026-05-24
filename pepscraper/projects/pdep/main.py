@@ -235,7 +235,7 @@ class PDEPProjectScraper(ProjectScraper):
                         ProposalStatus(
                             project_id=self.project.project_id,
                             proposal_id=proposal_id,
-                            stage_index=len(proposal.stage_history),
+                            status_index=len(proposal.stage_history),
                             normalised_status=ProposalStatus.normalise_status(status),
                             raw_status=status,
                             created_at=proposal_revision.created_at,
