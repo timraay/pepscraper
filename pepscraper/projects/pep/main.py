@@ -56,7 +56,7 @@ class PEPProjectScraper(ProjectScraper):
             topic=pep["topic"],
             proposal_type=pep["type"],
             revisions=[],
-            stage_history=[],
+            statuses=[],
         )
 
         # Fetch revisions
@@ -117,14 +117,14 @@ class PEPProjectScraper(ProjectScraper):
 
             # Update stage history
             if (
-                len(proposal.stage_history) == 0
-                or proposal.stage_history[-1].raw_status != features[1]
+                len(proposal.statuses) == 0
+                or proposal.statuses[-1].raw_status != features[1]
             ):
-                proposal.stage_history.append(
+                proposal.statuses.append(
                     ProposalStatus(
                         project_id=project.project_id,
                         proposal_id=str(pep["number"]),
-                        status_index=len(proposal.stage_history),
+                        status_index=len(proposal.statuses),
                         normalised_status=ProposalStatus.normalise_status(features[1]),
                         raw_status=features[1],
                         created_at=created_at,

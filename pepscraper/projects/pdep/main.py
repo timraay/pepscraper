@@ -248,11 +248,11 @@ class PDEPProjectScraper(ProjectScraper):
                 prev_status: str | None = None
                 for created_at, status in statuses:
                     if status != prev_status:
-                        proposal.stage_history.append(
+                        proposal.statuses.append(
                             ProposalStatus(
                                 project_id=self.project.project_id,
                                 proposal_id=proposal.proposal_id,
-                                status_index=len(proposal.stage_history),
+                                status_index=len(proposal.statuses),
                                 normalised_status=ProposalStatus.normalise_status(
                                     status
                                 ),

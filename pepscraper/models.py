@@ -150,7 +150,7 @@ class Proposal(SQLModel, table=True):
     project: "Project" = Relationship(back_populates="proposals")
     proposer: "Person" = Relationship(back_populates="proposals")
     revisions: list["ProposalRevision"] = Relationship(back_populates="proposal")
-    stage_history: list["ProposalStatus"] = Relationship(back_populates="proposal")
+    statuses: list["ProposalStatus"] = Relationship(back_populates="proposal")
     comments: list["Comment"] = Relationship(back_populates="proposal")
 
 
@@ -165,7 +165,7 @@ class NormalizedProposalStatus(StrEnum):
 
 
 class ProposalStatus(SQLModel, table=True):
-    __tablename__ = "StageHistory"
+    __tablename__ = "ProposalStatus"
     project_id: Annotated[int, Field(primary_key=True)]
     proposal_id: Annotated[str, Field(primary_key=True)]
     status_index: Annotated[int, Field(primary_key=True)]
@@ -183,7 +183,7 @@ class ProposalStatus(SQLModel, table=True):
     raw_status: str | None
     created_at: datetime
 
-    proposal: "Proposal" = Relationship(back_populates="stage_history")
+    proposal: "Proposal" = Relationship(back_populates="statuses")
 
     __table_args__ = (
         ForeignKeyConstraint(
