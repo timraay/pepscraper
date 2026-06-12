@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Annotated, Optional
 
+from pydantic import AfterValidator
 from sqlalchemy import (
     CheckConstraint,
     Column,
@@ -20,6 +21,10 @@ def enum_to_check_constraint(
     return CheckConstraint(
         f"{column_name} IN ('" + "', '".join(enum_cls) + "')",
     )
+
+
+def as_utc(dt: datetime) -> datetime:
+    return dt.astimezone(UTC)
 
 
 class Project(SQLModel, table=True):
@@ -165,6 +170,7 @@ class NormalizedProposalStatus(StrEnum):
 
 
 class ProposalStatus(SQLModel, table=True):
+    model_config = {"validate_assignment": True}
     __tablename__ = "ProposalStatus"
     project_id: Annotated[int, Field(primary_key=True)]
     proposal_id: Annotated[str, Field(primary_key=True)]
@@ -181,7 +187,7 @@ class ProposalStatus(SQLModel, table=True):
         ),
     ]
     raw_status: str | None
-    created_at: datetime
+    created_at: Annotated[datetime, AfterValidator(as_utc)]
 
     proposal: "Proposal" = Relationship(back_populates="statuses")
 
@@ -248,13 +254,14 @@ NORMALIZED_STATUS_MAP: dict[str, NormalizedProposalStatus] = {
 
 
 class ProposalRevision(SQLModel, table=True):
+    model_config = {"validate_assignment": True}
     __tablename__ = "ProposalRevision"
 
     project_id: Annotated[int, Field(primary_key=True)]
     proposal_id: Annotated[str, Field(primary_key=True)]
     revision_index: Annotated[int, Field(primary_key=True)]
     title: str
-    created_at: datetime
+    created_at: Annotated[datetime, AfterValidator(as_utc)]
     content: str | None
     implemented_at_version: str | None
 
@@ -309,6 +316,7 @@ class RelatedProposal(SQLModel, table=True):
 
 
 class Comment(SQLModel, table=True):
+    model_config = {"validate_assignment": True}
     __tablename__ = "Comment"
 
     comment_id: Annotated[int | None, Field(primary_key=True)] = None
@@ -320,6 +328,7 @@ class Comment(SQLModel, table=True):
     ] = None
     created_at: Annotated[
         datetime,
+        AfterValidator(as_utc),
         Field(
             default_factory=datetime.now(tz=UTC),
             sa_column=Column(
