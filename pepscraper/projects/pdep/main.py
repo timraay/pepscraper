@@ -7,6 +7,7 @@ from aiohttp import ClientResponseError
 from dateutil import parser
 from sqlmodel import SQLModel
 
+from pepscraper.constants import END_DATE
 from pepscraper.http import request_page
 from pepscraper.models import (
     Comment,
@@ -45,6 +46,10 @@ class PDEPProjectScraper(ProjectScraper):
         commit: dict[str, Any],
         proposal_filename: str,
     ) -> tuple[str, ProposalRevision, str] | None:
+        created_at = parser.parse(str(commit["commit"]["author"]["date"]))
+        if created_at > END_DATE:
+            return None
+
         pull_request_number = int(pull_request_details["number"])
         try:
             proposal_id = get_proposal_id_from_title(str(pull_request_details["title"]))
@@ -111,7 +116,7 @@ class PDEPProjectScraper(ProjectScraper):
             revision_index=0,
             title=features.title,
             # status=features.status.lower(),
-            created_at=parser.parse(str(commit["commit"]["author"]["date"])),
+            created_at=created_at,
             content=features.content,
             implemented_at_version=None,
             authors=authors,
@@ -200,6 +205,10 @@ class PDEPProjectScraper(ProjectScraper):
                 proposal_revisions.append(proposal_revision)
                 statuses.append((proposal_revision.created_at, status))
 
+            # If a proposal was created after END_DATE, no revisions will be extracted
+            if not proposal_revisions:
+                continue
+
             # Find an existing proposal.
             # PDEPs can take on the ID of previously rejected PDEPs, so we need to
             # check for matching filenames as well.
@@ -272,6 +281,10 @@ class PDEPProjectScraper(ProjectScraper):
         models: list[Comment] = []
 
         for pull_request in await get_pdep_pull_requests():
+            pull_request_created_at = parser.parse(pull_request["created_at"])
+            if pull_request_created_at > END_DATE:
+                continue
+
             pull_request_number = int(pull_request["number"])
             try:
                 proposal_id = get_proposal_id_from_title(str(pull_request["title"]))
@@ -295,7 +308,7 @@ class PDEPProjectScraper(ProjectScraper):
                 project_id=self.project.project_id,
                 proposal_id=proposal_id,
                 comment_on_comment_id=None,
-                created_at=parser.parse(str(pull_request_details["created_at"])),
+                created_at=pull_request_created_at,
                 content=str(pull_request_details.get("body", "")),
             )
             pull_request_comment.author = pull_request_author
@@ -306,6 +319,10 @@ class PDEPProjectScraper(ProjectScraper):
             )
             comments.sort(key=lambda comment: parser.parse(str(comment["created_at"])))
             for comment_data in comments:
+                comment_created_at = parser.parse(comment_data["created_at"])
+                if comment_created_at > END_DATE:
+                    continue
+
                 author_data = cast(dict[str, Any] | None, comment_data.get("user"))
                 if not author_data or not author_data.get("login"):
                     continue

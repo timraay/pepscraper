@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Final
 
 SQLITE_DB_URL: Final[str] = "sqlite+aiosqlite:///data/pepscraper.db"
@@ -32,5 +32,5 @@ PYTHON_MAILING_LISTS: Final[tuple[tuple[str, timedelta], ...]] = (
 """A list of Python mailing lists to scrape. The timedelta indicates the window size to
 use. Large window sizes may cause API timeouts if the mailing list is very active."""
 
-START_DATE: Final[datetime] = datetime(2000, 1, 1)
-END_DATE: Final[datetime] = datetime(2026, 1, 1)
+START_DATE: Final[datetime] = datetime(2000, 1, 1, tzinfo=UTC)
+END_DATE: Final[datetime] = datetime(2026, 6, 1, tzinfo=UTC)
