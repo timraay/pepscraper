@@ -49,6 +49,9 @@ class ProjectScraper(ABC):
         if identity.username is not None:
             person = self._get_person_by_username(identity.username, identity.domain)
             if person is not None:
+                # Update full name if known
+                if identity.full_name is not None and person.full_name is None:
+                    person.full_name = identity.full_name
                 return person
 
         return None
