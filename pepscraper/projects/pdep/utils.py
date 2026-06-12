@@ -17,8 +17,8 @@ PDEP_HEADER_PATTERNS = [
     (re.compile(r"^-\s+Status:\s+(.+)$", re.MULTILINE), "status"),
     (
         re.compile(
-            r"^-\s+Authors?:\s+(.+?)(?=\n-\s|\n\n|$)",
-            re.MULTILINE | re.DOTALL,
+            r"^-\s+Authors?:\s+((?:.|\n  )+)(?=\n-\s|\n\n|\n$)",
+            re.MULTILINE,
         ),
         "authors",
     ),
